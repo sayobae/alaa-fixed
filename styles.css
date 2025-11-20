@@ -1,0 +1,39 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+.group-block {
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+}
+
+.delete-button {
+  background: #b30000;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+table {
+  margin-top: 20px;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table, th, td {
+  border: 1px solid #666;
+}
+
+th, td {
+  padding: 5px;
+  text-align: right;
+}
+
+th {
+  background: #eee;
+}
