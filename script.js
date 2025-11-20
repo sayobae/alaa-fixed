@@ -134,4 +134,46 @@ function calculateCosts() {
       <tr>
         <th>Year</th>
         <th>Union Total</th>
-        <th>Mgmt Tot
+        <th>Mgmt Total</th>
+        <th>Last Contract</th>
+        <th>Union - Mgmt</th>
+        <th>Union - Last</th>
+      </tr>`;
+
+    for (let y = 0; y < years; y++) {
+      table.innerHTML += `
+        <tr>
+          <td>Year ${y + 1}</td>
+          <td>${yearlyUnion[y].toFixed(2)}</td>
+          <td>${yearlyMgmt[y].toFixed(2)}</td>
+          <td>${yearlyLast[y].toFixed(2)}</td>
+          <td>${(yearlyUnion[y] - yearlyMgmt[y]).toFixed(2)}</td>
+          <td>${(yearlyUnion[y] - yearlyLast[y]).toFixed(2)}</td>
+        </tr>`;
+    }
+
+    // Individual Salary Progression Table with year-by-year difference (horizontal layout)
+    table.innerHTML += `<tr><th colspan="${1 + years*3}">${groupName} — Individual Salary Progression</th></tr>`;
+
+    let headerRow = '<tr><th>Step</th>';
+    for (let y = 0; y < years; y++) headerRow += `<th>Union Yr ${y+1}</th>`;
+    for (let y = 0; y < years; y++) headerRow += `<th>Mgmt Yr ${y+1}</th>`;
+    for (let y = 0; y < years; y++) headerRow += `<th>Diff Yr ${y+1}</th>`;
+    headerRow += '</tr>';
+    table.innerHTML += headerRow;
+
+    steps.forEach((step, i) => {
+      const unionProg = individualProgression(unionSteps[i], unionMult);
+      const mgmtProg = individualProgression(mgmtSteps[i], mgmtMult);
+      const diffProg = unionProg.map((v, idx) => (v - mgmtProg[idx]).toFixed(2));
+
+      let row = `<tr><td>${step}</td>`;
+      unionProg.forEach(v => row += `<td>${v.toFixed(2)}</td>`);
+      mgmtProg.forEach(v => row += `<td>${v.toFixed(2)}</td>`);
+      diffProg.forEach(v => row += `<td>${v}</td>`);
+      row += '</tr>';
+
+      table.innerHTML += row;
+    });
+  });
+}
