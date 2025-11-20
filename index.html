@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Contract Cost Calculator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1>Contract Cost Calculator</h1>
+
+<label>Contract Years:</label>
+<input id="contract-years" type="number" value="4">
+
+<label>Last Contract Raise (%):</label>
+<input id="last-raise" type="number" value="3">
+
+<button id="addGroupButton">Add Group</button>
+<button id="calculateButton">Calculate</button>
+<button id="exportButton">Export CSV</button>
+
+<div id="groups-container"></div>
+
+<h2>Total Results</h2>
+<table id="resultsTable"></table>
+
+<h2>Individual Step-Year Salary Calculations</h2>
+<table id="stepDetailsTable"></table>
+
+<script src="script.js"></script>
+</body>
+</html>
