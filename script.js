@@ -8,97 +8,110 @@ document.addEventListener("DOMContentLoaded", function () {
 
 function addGroup() {
   const container = document.getElementById("groups-container");
-  const id = groupId++;
-
   const div = document.createElement("div");
   div.className = "group-block";
-  div.id = `group-${id}`;
+  div.id = `group-${groupId}`;
 
   div.innerHTML = `
-    <h2>Group ${id + 1}</h2>
+    <h2>Group ${groupId + 1}</h2>
 
     <label>Group Name:</label>
     <input type="text" class="group-name" placeholder="e.g. Attorneys">
 
-    <label>Paste Headcount, Union Step, Mgmt Step (Tab-separated):</label>
-    <textarea class="group-csv" rows="4"
-      placeholder="0	$83,500	$80,659.71\n3	$88,000	$84,500"></textarea>
+    <label>Paste Step, Headcount, Union Step $, Mgmt Step $ (tab-separated):</label>
+    <textarea class="group-csv" placeholder="1\t3\t$83,500\t$80,659.71\n2\t0\t$85,500\t$82,782.34\n3\t4\t$88,666\t$84,904.96"></textarea>
 
-    <label>Union Raise (%):</label>
-    <input type="number" class="union-raise" value="3">
+    <label>Union Raises (% by year, comma separated):</label>
+    <input type="text" class="union-raises" value="3,2,2">
 
-    <label>Mgmt Raise (%):</label>
-    <input type="number" class="mgmt-raise" value="2">
+    <label>Mgmt Raises (% by year, comma separated):</label>
+    <input type="text" class="mgmt-raises" value="2,2,1">
 
-    <button class="delete-button" onclick="removeGroup(${id})">Delete Group</button>
+    <button type="button" class="delete-group" onclick="removeGroup(${groupId})">Delete Group</button>
   `;
 
   container.appendChild(div);
+  groupId++;
 }
 
 function removeGroup(id) {
-  const el = document.getElementById(`group-${id}`);
-  if (el) el.remove();
+  const block = document.getElementById(`group-${id}`);
+  if (block) block.remove();
 }
 
-function parseCSVTriples(text) {
+//
+// Parse tab-separated 4-column input:
+// Step | Headcount | Union $ | Mgmt $
+//
+function parseCSV(text) {
   const lines = text.split("\n");
-  const headcounts = [], unionSteps = [], mgmtSteps = [];
+  const steps = [];
+  const headcounts = [];
+  const unionSteps = [];
+  const mgmtSteps = [];
 
   lines.forEach(line => {
     const parts = line.split("\t");
-    if (parts.length === 3) {
-      const headcount = parseFloat(parts[0].trim().replace(/[\$,]/g, ""));
-      const union = parseFloat(parts[1].trim().replace(/[\$,]/g, ""));
-      const mgmt = parseFloat(parts[2].trim().replace(/[\$,]/g, ""));
+    if (parts.length !== 4) return;
 
-      if (!isNaN(headcount) && !isNaN(union) && !isNaN(mgmt)) {
-        headcounts.push(headcount);
-        unionSteps.push(union);
-        mgmtSteps.push(mgmt);
-      }
+    const step = parseFloat(parts[0].trim());
+    const head = parseFloat(parts[1].trim());
+    const union = parseFloat(parts[2].trim().replace(/[$,]/g, ""));
+    const mgmt = parseFloat(parts[3].trim().replace(/[$,]/g, ""));
+
+    if (!isNaN(step) && !isNaN(head) && !isNaN(union) && !isNaN(mgmt)) {
+      steps.push(step);
+      headcounts.push(head);
+      unionSteps.push(union);
+      mgmtSteps.push(mgmt);
     }
   });
 
-  return { headcounts, unionSteps, mgmtSteps };
+  return { steps, headcounts, unionSteps, mgmtSteps };
 }
 
-function weightedCost(steps, headcounts) {
-  return steps.reduce((sum, step, i) => sum + step * (headcounts[i] || 0), 0);
-}
+//
+// Given a list of raises per year, return multiplier list
+//
+function getRaiseMultipliers(raises, years) {
+  const arr = raises.split(",").map(x => parseFloat(x.trim()));
+  const multipliers = [];
+  let current = 1;
 
-function computeStepYearValues(steps, raisePct, years) {
-  const out = steps.map(base => {
-    let arr = [base];
-    for (let y = 1; y < years; y++) {
-      arr.push(arr[y - 1] * (1 + raisePct / 100));
-    }
-    return arr;
-  });
-  return out;
-}
-
-function calculateProposalCosts(steps, headcounts, raisePct, years) {
-  const totals = [];
-  let current = [...steps];
   for (let y = 0; y < years; y++) {
-    totals.push(weightedCost(current, headcounts));
-    current = current.map(s => s * (1 + raisePct / 100));
+    const raise = arr[y] || arr[arr.length - 1] || 0;
+    current *= 1 + raise / 100;
+    multipliers.push(current);
   }
-  return totals;
+  return multipliers;
 }
 
-function sum(arr) {
-  return arr.reduce((a, b) => a + b, 0);
+//
+// Weighted total (headcount * salary)
+//
+function weightedCost(steps, headcounts) {
+  return steps.reduce((s, val, i) => s + val * headcounts[i], 0);
 }
 
+//
+// Salary progression for an individual amount
+//
+function individualProgression(startingSalary, multipliers) {
+  return multipliers.map(m => startingSalary * m);
+}
+
+//
+// Export table
+//
 function exportCSV() {
   const table = document.getElementById("resultsTable");
   let csv = "";
+
   for (let row of table.rows) {
-    const cells = Array.from(row.cells).map(c => `"${c.textContent.trim()}"`);
+    const cells = [...row.cells].map(c => `"${c.textContent}"`);
     csv += cells.join(",") + "\n";
   }
+
   const blob = new Blob([csv], { type: "text/csv" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -106,86 +119,95 @@ function exportCSV() {
   link.click();
 }
 
+//
+// Main Calculation
+//
 function calculateCosts() {
   const years = parseInt(document.getElementById("contract-years").value);
   const lastRaise = parseFloat(document.getElementById("last-raise").value);
 
-  let unionTotals = Array(years).fill(0);
-  let mgmtTotals = Array(years).fill(0);
-  let lastTotals = Array(years).fill(0);
+  const rows = document.getElementById("groups-container").querySelectorAll(".group-block");
 
-  const resultsTable = document.getElementById("resultsTable");
-  const stepTable = document.getElementById("stepDetailsTable");
+  const table = document.getElementById("resultsTable");
+  table.innerHTML = "";
 
-  resultsTable.innerHTML = "";
-  stepTable.innerHTML = "";
+  rows.forEach(group => {
+    const groupName = group.querySelector(".group-name").value || "Unnamed Group";
 
-  const groups = document.querySelectorAll(".group-block");
+    const csvInput = group.querySelector(".group-csv").value;
+    const { steps, headcounts, unionSteps, mgmtSteps } = parseCSV(csvInput);
 
-  groups.forEach(group => {
-    const name = group.querySelector(".group-name").value || "Unnamed Group";
-    const unionRaise = parseFloat(group.querySelector(".union-raise").value);
-    const mgmtRaise = parseFloat(group.querySelector(".mgmt-raise").value);
-    const { headcounts, unionSteps, mgmtSteps } =
-      parseCSVTriples(group.querySelector(".group-csv").value);
+    const unionRaiseStr = group.querySelector(".union-raises").value;
+    const mgmtRaiseStr = group.querySelector(".mgmt-raises").value;
 
-    const union = calculateProposalCosts(unionSteps, headcounts, unionRaise, years);
-    const mgmt = calculateProposalCosts(mgmtSteps, headcounts, mgmtRaise, years);
-    const last = calculateProposalCosts(mgmtSteps, headcounts, lastRaise, years);
+    const unionMult = getRaiseMultipliers(unionRaiseStr, years);
+    const mgmtMult = getRaiseMultipliers(mgmtRaiseStr, years);
+    const lastMult = getRaiseMultipliers(lastRaise.toString(), years);
 
-    unionTotals = unionTotals.map((v, i) => v + union[i]);
-    mgmtTotals = mgmtTotals.map((v, i) => v + mgmt[i]);
-    lastTotals = lastTotals.map((v, i) => v + last[i]);
+    // Total weighted cost
+    const unionTotals = unionSteps.map((s, i) => individualProgression(s, unionMult).map(v => v * headcounts[i]));
+    const mgmtTotals = mgmtSteps.map((s, i) => individualProgression(s, mgmtMult).map(v => v * headcounts[i]));
+    const lastTotals = mgmtSteps.map((s, i) => individualProgression(s, lastMult).map(v => v * headcounts[i]));
 
-    resultsTable.innerHTML += `
-      <tr><th colspan="6">${name}</th></tr>
+    const yearlyUnion = Array(years).fill(0);
+    const yearlyMgmt = Array(years).fill(0);
+    const yearlyLast = Array(years).fill(0);
+
+    unionTotals.forEach(arr => arr.forEach((v, i) => yearlyUnion[i] += v));
+    mgmtTotals.forEach(arr => arr.forEach((v, i) => yearlyMgmt[i] += v));
+    lastTotals.forEach(arr => arr.forEach((v, i) => yearlyLast[i] += v));
+
+    //
+    // Output
+    //
+    table.innerHTML += `<tr><th colspan="6">${groupName}</th></tr>`;
+    table.innerHTML += `
       <tr>
-        <th>Year</th><th>Union</th><th>Mgmt</th>
-        <th>Last Contract</th><th>Union - Mgmt</th><th>Union - Last</th>
+        <th>Year</th>
+        <th>Union Total</th>
+        <th>Mgmt Total</th>
+        <th>Last Contract</th>
+        <th>Union - Mgmt</th>
+        <th>Union - Last</th>
       </tr>
     `;
 
     for (let y = 0; y < years; y++) {
-      resultsTable.innerHTML += `
+      table.innerHTML += `
         <tr>
           <td>Year ${y + 1}</td>
-          <td>${union[y].toFixed(2)}</td>
-          <td>${mgmt[y].toFixed(2)}</td>
-          <td>${last[y].toFixed(2)}</td>
-          <td>${(union[y] - mgmt[y]).toFixed(2)}</td>
-          <td>${(union[y] - last[y]).toFixed(2)}</td>
+          <td>${yearlyUnion[y].toFixed(2)}</td>
+          <td>${yearlyMgmt[y].toFixed(2)}</td>
+          <td>${yearlyLast[y].toFixed(2)}</td>
+          <td>${(yearlyUnion[y] - yearlyMgmt[y]).toFixed(2)}</td>
+          <td>${(yearlyUnion[y] - yearlyLast[y]).toFixed(2)}</td>
         </tr>
       `;
     }
 
-    const unionStepYears = computeStepYearValues(unionSteps, unionRaise, years);
-    const mgmtStepYears = computeStepYearValues(mgmtSteps, mgmtRaise, years);
-
-    stepTable.innerHTML += `
-      <tr><th colspan="${years + 2}">${name} — Salary Progression Per Step</th></tr>
+    //
+    // INDIVIDUAL step salary progression
+    //
+    table.innerHTML += `<tr><th colspan="6">Individual Salary Progression</th></tr>`;
+    table.innerHTML += `
       <tr>
         <th>Step</th>
-        ${Array.from({ length: years }, (_, i) => `<th>Year ${i + 1}</th>`).join("")}
-        <th>Type</th>
+        <th>Union Progression</th>
+        <th>Mgmt Progression</th>
       </tr>
     `;
 
-    unionStepYears.forEach((arr, idx) => {
-      stepTable.innerHTML += `
-        <tr>
-          <td>${idx + 1}</td>
-          ${arr.map(v => `<td>${v.toFixed(2)}</td>`).join("")}
-          <td>Union</td>
-        </tr>`;
-    });
+    steps.forEach((step, i) => {
+      const iu = individualProgression(unionSteps[i], unionMult).map(v => v.toFixed(2)).join(" → ");
+      const im = individualProgression(mgmtSteps[i], mgmtMult).map(v => v.toFixed(2)).join(" → ");
 
-    mgmtStepYears.forEach((arr, idx) => {
-      stepTable.innerHTML += `
+      table.innerHTML += `
         <tr>
-          <td>${idx + 1}</td>
-          ${arr.map(v => `<td>${v.toFixed(2)}</td>`).join("")}
-          <td>Mgmt</td>
-        </tr>`;
+          <td>${step}</td>
+          <td>${iu}</td>
+          <td>${im}</td>
+        </tr>
+      `;
     });
   });
 }
